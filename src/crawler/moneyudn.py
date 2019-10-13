@@ -1,13 +1,17 @@
 """MoneyUDNCrawler scratch by keywords and time rage to get related news link."""
 import argparse
 import logging
+import os
+import sys
 
 from bs4 import BeautifulSoup
 from datetime import datetime
 from dateutil.parser import parse as parse_dt
 from time import sleep
 
-from session_crawler import SessionCrawler
+THIS_FILE_DIR = os.path.dirname(__file__)
+sys.path.append(os.path.join(THIS_FILE_DIR, '..'))
+from crawler.session_crawler import SessionCrawler
 
 logger_format = '%(asctime)-15s:%(levelname)s:%(name)s:%(message)s'
 logger = logging.getLogger(__name__)

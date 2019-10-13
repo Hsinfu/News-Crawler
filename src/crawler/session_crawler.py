@@ -84,5 +84,5 @@ class SessionCrawler(BaseSessionCrawler):
             data = self.search(keyword, start, end)
             df = pd.DataFrame(data)
             df['keyword'] = [keyword for _ in range(len(df))]
-            df_all = df_all.append(df, ignore_index=False, sort=False)
+            df_all = df_all.append(df, ignore_index=True, sort=False)
         return df_all
