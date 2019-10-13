@@ -1,10 +1,11 @@
-"""ChinaTimesCrawler scratch by keywords and time rage to get related news link."""
+"""MoneyUDNCrawler scratch by keywords and time rage to get related news link."""
 import argparse
 import logging
 
 from bs4 import BeautifulSoup
 from datetime import datetime
 from dateutil.parser import parse as parse_dt
+from time import sleep
 
 from session_crawler import SessionCrawler
 
@@ -12,25 +13,33 @@ logger_format = '%(asctime)-15s:%(levelname)s:%(name)s:%(message)s'
 logger = logging.getLogger(__name__)
 
 
-class ChinaTimesCrawler(SessionCrawler):
-    BASE_URL = 'https://www.chinatimes.com/search/'
+class MoneyUDNCrawler(SessionCrawler):
+    BASE_URL = 'https://money.udn.com/search/result/1001/'
 
     @staticmethod
     def get_url(keyword, page=1):
-        return '{}{}?page={}&chdtv'.format(ChinaTimesCrawler.BASE_URL, keyword, page)
+        return '{}{}/{}'.format(MoneyUDNCrawler.BASE_URL, keyword, page)
 
     def _extract_page_data(self, page_html, keyword):
         def get_title(ele):
-            return ''.join(ele.select_one('h3.title a').contents)
+            def gen_title():
+                for c in ele.select_one('h3').contents:
+                    # NOTE: handle the <u>{keyword}</u>
+                    yield c if isinstance(c, str) else ''.join(c.contents)
+            return ''.join(gen_title())
 
         def get_link(ele):
-            return ele.select_one('h3.title a').attrs['href']
+            return ele.select_one('a').attrs['href']
 
-        def get_time(ele):
-            return parse_dt(ele.select_one('time').attrs['datetime'])
+        def get_time(link):
+            res = self.session.get(link)
+            sleep(self.PAGE_QUERY_INTERVAL)
+            soup = BeautifulSoup(res.content, 'html.parser')
+            time_ele = soup.select_one('div#story div#shareBar div.shareBar__info--author span')
+            return parse_dt(time_ele.contents[0])
 
         soup = BeautifulSoup(page_html, 'html.parser')
-        html_elements = soup.select('section.search-result div.article-list ul li')
+        html_elements = soup.select('div#search_content dl dt')
         for html_ele in html_elements:
             title = get_title(html_ele)
             # if not self.global_search, skip data while keyword not in title
@@ -38,7 +47,7 @@ class ChinaTimesCrawler(SessionCrawler):
                 logger.debug('Skip data, since keyword(%s) not in title(%s)', keyword, title)
                 continue
             link = get_link(html_ele)
-            time = get_time(html_ele)
+            time = get_time(link)
             yield {'title': title, 'link': link, 'time': time}
 
 
@@ -84,8 +93,8 @@ def _main():
     else:
         logging.basicConfig(level=logging.INFO, format=logger_format)
 
-    chinatimes_crawler = ChinaTimesCrawler(global_search=args.global_search)
-    df_all = chinatimes_crawler.run(
+    moneyudn_crawler = MoneyUDNCrawler(global_search=args.global_search)
+    df_all = moneyudn_crawler.run(
         keywords=args.keywords,
         start=args.start,
         end=args.end)

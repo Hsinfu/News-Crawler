@@ -3,6 +3,7 @@ import abc
 import logging
 import pandas as pd
 
+from datetime import timedelta
 from time import sleep
 from requests import Session
 
@@ -26,22 +27,24 @@ class SessionCrawler(BaseSessionCrawler):
     MAX_QUERY_PAGE = 10  # set the max query page to avoid being banned
     PAGE_QUERY_INTERVAL = 1  # sleep 1 sec after page query to avoid being banned
 
+    def __init__(self, global_search=False):
+        super().__init__()
+        self.global_search = global_search
+
     @staticmethod
     @abc.abstractmethod
     def get_url(keyword, page=1):
         raise NotImplementedError
 
     @staticmethod
-    @abc.abstractmethod
-    def _extract_page_data(page_html):
+    def _extract_page_data(self, page_html, keyword):
         raise NotImplementedError
 
     def gen_page_data(self, keyword, page=1):
         url = self.get_url(keyword, page)
         logger.info('Crawling url: %s', url)
         res = self.session.get(url)
-        page_html = res.content
-        yield from self._extract_page_data(page_html)
+        yield from self._extract_page_data(res.content, keyword)
 
     def gen_data(self, keyword):
         """
@@ -54,24 +57,31 @@ class SessionCrawler(BaseSessionCrawler):
             sleep(self.PAGE_QUERY_INTERVAL)
         logger.warning('Exceed MAX_QUERY_PAGE %d', self.MAX_QUERY_PAGE)
 
-    def search(self, keyword, start, end, global_search=False):
+    def search(self, keyword, start, end):
         for d in self.gen_data(keyword):
-            if not global_search and keyword not in d['title']:
-                logger.debug('Skip data %s, since keyword(%s) not in title(%s)', d, keyword, d['title'])
-                continue
+            # NOTE: stop search if start - 1 day is reaching
+            if d['time'] < start - timedelta(days=1):
+                logger.info('Stop search, since d["time"](%s) < start(%s) - 1 day', d['time'], start)
+                break
+
+            # skip time > end
             if d['time'] > end:
                 logger.debug('Skip data %s, since d["time"](%s) > end(%s)', d, d['time'], end)
                 continue
+
+            # skip time < start
             if d['time'] < start:
-                logger.info('Stop search, since d["time"](%s) < start(%s)', d['time'], start)
-                break
+                logger.debug('Skip data %s, since d["time"](%s) < start(%s)', d, d['time'], start)
+                continue
+
+            # yield d
             logger.info('Get data: %s', d)
             yield d
 
-    def run(self, keywords, start, end, global_search=False):
+    def run(self, keywords, start, end):
         df_all = pd.DataFrame()
         for keyword in keywords:
-            data = self.search(keyword, start, end, global_search)
+            data = self.search(keyword, start, end)
             df = pd.DataFrame(data)
             df['keyword'] = [keyword for _ in range(len(df))]
             df_all = df_all.append(df, ignore_index=False, sort=False)
