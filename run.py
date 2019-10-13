@@ -81,6 +81,12 @@ def _main():
             end=args.end)
         df_all = df_all.append(df_chinatimes, ignore_index=True, sort=False)
 
+    df_all = df_all.sort_values(
+        by=['keyword', 'time'],
+        ascending=[True, False])
+
+    df_all['title_link'] = df_all.apply(
+        lambda x: '=HYPERLINK("{}", "{}")'.format(x.link, x.title), axis=1)
     print(df_all)
 
     # set the output filename
@@ -101,14 +107,14 @@ def _main():
     # Convert the dataframe to an XlsxWriter Excel object.
     df_all.to_excel(
         writer,
-        columns=['keyword', 'time', 'title', 'link'],
+        columns=['keyword', 'time', 'title_link'],
         sheet_name=sheet_name,
         index=None,
         header=True)
 
     # Set the column widths, to make the dates clearer.
     writer.sheets[sheet_name].set_column('B:B', 15)
-    writer.sheets[sheet_name].set_column('C:D', 60)
+    writer.sheets[sheet_name].set_column('C:C', 60)
 
     # Close the Pandas Excel writer and output the Excel file.
     writer.save()
